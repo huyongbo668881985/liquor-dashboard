@@ -1,0 +1,111 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Product {
+  id        Int      @id @default(autoincrement())
+  name      String
+  spec      String   @default("")
+  unit      String   @default("箱")
+  cost      Float
+  createdAt DateTime @default(now())
+
+  directSales         DirectSale[]
+  directPurchases     DirectPurchase[]
+  shipments           Shipment[]
+  distributorExpenses DistributorExpense[]
+}
+
+model DirectSale {
+  id        Int      @id @default(autoincrement())
+  date      DateTime
+  productId Int
+  product   Product  @relation(fields: [productId], references: [id])
+  quantity  Int
+  amount    Float
+  received  Float    @default(0)
+
+  createdAt DateTime @default(now())
+}
+
+model DirectPurchase {
+  id        Int      @id @default(autoincrement())
+  date      DateTime
+  productId Int
+  product   Product  @relation(fields: [productId], references: [id])
+  quantity  Int
+  amount    Float
+  remark    String   @default("")
+  createdAt DateTime @default(now())
+}
+
+model DirectExpense {
+  id        Int      @id @default(autoincrement())
+  date      DateTime
+  category  String
+  amount    Float
+  remark    String   @default("")
+  createdAt DateTime @default(now())
+}
+
+model Distributor {
+  id        Int      @id @default(autoincrement())
+  name      String
+  region    String   @default("")
+  remark    String   @default("")
+  createdAt DateTime @default(now())
+
+  shipments          Shipment[]
+  expensePlans       ExpensePlan[]
+  distributorExpenses DistributorExpense[]
+}
+
+model Shipment {
+  id            Int         @id @default(autoincrement())
+  distributorId Int
+  distributor   Distributor @relation(fields: [distributorId], references: [id])
+  productId     Int
+  product       Product     @relation(fields: [productId], references: [id])
+  date          DateTime
+  quantity      Int
+  amount        Float
+  createdAt     DateTime    @default(now())
+}
+
+model ExpensePlan {
+  id            Int         @id @default(autoincrement())
+  distributorId Int
+  distributor   Distributor @relation(fields: [distributorId], references: [id])
+  name          String
+  amount        Float
+  remark        String      @default("")
+  createdAt     DateTime    @default(now())
+}
+
+model DistributorExpense {
+  id            Int         @id @default(autoincrement())
+  distributorId Int
+  distributor   Distributor @relation(fields: [distributorId], references: [id])
+  type          String      @default("cash")
+  amount        Float       @default(0)
+  productId     Int?
+  product       Product?    @relation(fields: [productId], references: [id])
+  quantity      Int         @default(0)
+  date          DateTime
+  remark        String      @default("")
+  createdAt     DateTime    @default(now())
+}
+
+model CashFlow {
+  id        Int      @id @default(autoincrement())
+  date      DateTime
+  type      String
+  amount    Float
+  remark    String   @default("")
+  createdAt DateTime @default(now())
+}
