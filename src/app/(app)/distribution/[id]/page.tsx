@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
-import { formatMoney, EmptyState } from "@/components/ui";
+import { formatMoney, formatPercent, EmptyState, ExportButton, exportToCSV } from "@/components/ui";
 import Link from "next/link";
 
 interface Product {
@@ -177,6 +177,45 @@ export default function DistributorDetailPage() {
   const totalShipProfit = totalShipAmount - totalShipCost;
   const totalPlanAmount = plans.reduce((s, p) => s + p.amount, 0);
   const totalExpenseAmount = expenses.reduce((s, e) => s + e.amount, 0);
+  // 毛利率 = 毛利 / 发货金额
+  const marginRate = totalShipAmount === 0 ? 0 : (totalShipProfit / totalShipAmount) * 100;
+
+  const exportShipments = () => {
+    exportToCSV(
+      `${distributor?.name || "客户"}_发货记录`,
+      ["日期", "产品", "数量", "发货金额", "成本", "毛利"],
+      shipments.map(sh => [
+        new Date(sh.date).toLocaleDateString("zh-CN"),
+        sh.product.name,
+        sh.quantity,
+        sh.amount.toFixed(2),
+        (sh.quantity * sh.product.cost).toFixed(2),
+        (sh.amount - sh.quantity * sh.product.cost).toFixed(2),
+      ])
+    );
+  };
+
+  const exportPlans = () => {
+    exportToCSV(
+      `${distributor?.name || "客户"}_费用规划`,
+      ["费用名称", "规划金额", "备注"],
+      plans.map(p => [p.name, p.amount.toFixed(2), p.remark || "-"])
+    );
+  };
+
+  const exportExpenses = () => {
+    exportToCSV(
+      `${distributor?.name || "客户"}_实际费用`,
+      ["日期", "类型", "明细", "金额", "备注"],
+      expenses.map(e => [
+        new Date(e.date).toLocaleDateString("zh-CN"),
+        e.type === "cash" ? "现金" : "酒水",
+        e.type === "cash" ? e.remark : (e.product ? `${e.product.name} × ${e.quantity}` : "-"),
+        e.amount.toFixed(2),
+        e.type === "product" ? e.remark || "-" : "-",
+      ])
+    );
+  };
 
   if (!distributor) return <div className="text-center py-12 text-gray-400">加载中...</div>;
 
@@ -191,7 +230,7 @@ export default function DistributorDetailPage() {
       </div>
 
       {/* 汇总卡片 */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-6">
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <div className="text-xs text-gray-500">累计发货金额</div>
           <div className="text-lg font-bold text-blue-600">{formatMoney(totalShipAmount)}</div>
@@ -203,6 +242,10 @@ export default function DistributorDetailPage() {
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <div className="text-xs text-gray-500">累计毛利</div>
           <div className="text-lg font-bold text-purple-600">{formatMoney(totalShipProfit)}</div>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <div className="text-xs text-gray-500">毛利率</div>
+          <div className="text-lg font-bold text-purple-600">{formatPercent(marginRate)}</div>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <div className="text-xs text-gray-500">已发生费用</div>
@@ -217,19 +260,25 @@ export default function DistributorDetailPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-4 bg-gray-100 rounded-lg p-1 w-fit">
-        <button onClick={() => setActiveTab("shipments")}
-          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === "shipments" ? "bg-white shadow-sm text-blue-600" : "text-gray-600 hover:text-gray-900"}`}>
-          发货记录
-        </button>
-        <button onClick={() => setActiveTab("plans")}
-          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === "plans" ? "bg-white shadow-sm text-blue-600" : "text-gray-600 hover:text-gray-900"}`}>
-          费用规划 ({plans.length})
-        </button>
-        <button onClick={() => setActiveTab("expenses")}
-          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === "expenses" ? "bg-white shadow-sm text-blue-600" : "text-gray-600 hover:text-gray-900"}`}>
-          实际费用 ({expenses.length})
-        </button>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit">
+          <button onClick={() => setActiveTab("shipments")}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === "shipments" ? "bg-white shadow-sm text-blue-600" : "text-gray-600 hover:text-gray-900"}`}>
+            发货记录
+          </button>
+          <button onClick={() => setActiveTab("plans")}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === "plans" ? "bg-white shadow-sm text-blue-600" : "text-gray-600 hover:text-gray-900"}`}>
+            费用规划 ({plans.length})
+          </button>
+          <button onClick={() => setActiveTab("expenses")}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === "expenses" ? "bg-white shadow-sm text-blue-600" : "text-gray-600 hover:text-gray-900"}`}>
+            实际费用 ({expenses.length})
+          </button>
+        </div>
+        <ExportButton
+          onClick={activeTab === "shipments" ? exportShipments : activeTab === "plans" ? exportPlans : exportExpenses}
+          label={`导出${activeTab === "shipments" ? "发货记录" : activeTab === "plans" ? "费用规划" : "实际费用"}`}
+        />
       </div>
 
       {/* TAB1: 发货记录 */}

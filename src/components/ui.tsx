@@ -37,6 +37,43 @@ export function formatMoney(n: number): string {
   return `¥${n.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+export function formatPercent(n: number): string {
+  if (!isFinite(n)) return "-";
+  return `${n.toFixed(1)}%`;
+}
+
+// 通用 CSV 导出：headers 为表头数组，rows 为二维数组（每行对应表头顺序）
+// 加 UTF-8 BOM 是为了让 Excel 打开中文不乱码
+export function exportToCSV(filename: string, headers: string[], rows: (string | number)[][]) {
+  const escapeCell = (cell: string | number) => {
+    const str = String(cell ?? "");
+    if (str.includes(",") || str.includes("\"") || str.includes("\n")) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+  };
+  const lines = [headers.map(escapeCell).join(","), ...rows.map(r => r.map(escapeCell).join(","))];
+  const csvContent = "\uFEFF" + lines.join("\r\n");
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename.endsWith(".csv") ? filename : `${filename}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+export function ExportButton({ onClick, label = "导出" }: { onClick: () => void; label?: string }) {
+  return (
+    <button onClick={onClick}
+      className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 transition-colors flex items-center gap-1.5">
+      <span>⬇️</span>{label}
+    </button>
+  );
+}
+
 export function PageHeader({ title, action }: { title: string; action?: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between mb-6">

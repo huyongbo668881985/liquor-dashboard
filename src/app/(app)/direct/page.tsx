@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { PageHeader, formatMoney, EmptyState, SectionCard } from "@/components/ui";
+import { PageHeader, formatMoney, EmptyState, SectionCard, ExportButton, exportToCSV } from "@/components/ui";
 
 interface Product {
   id: number;
@@ -145,6 +145,50 @@ export default function DirectPage() {
   const totalExpense = expenses.reduce((s, e) => s + e.amount, 0);
   const totalPurchaseAmount = purchases.reduce((s, p) => s + p.amount, 0);
 
+  const exportSales = () => {
+    exportToCSV(
+      `直营销售记录_${new Date().toLocaleDateString("zh-CN")}`,
+      ["日期", "产品", "数量", "销售金额", "成本", "毛利", "已收", "应收"],
+      sales.map(s => [
+        new Date(s.date).toLocaleDateString("zh-CN"),
+        s.product.name,
+        s.quantity,
+        s.amount.toFixed(2),
+        calcCost(s).toFixed(2),
+        calcProfit(s).toFixed(2),
+        s.received.toFixed(2),
+        calcReceivable(s).toFixed(2),
+      ])
+    );
+  };
+
+  const exportPurchases = () => {
+    exportToCSV(
+      `直营采购发货_${new Date().toLocaleDateString("zh-CN")}`,
+      ["日期", "产品", "数量", "采购金额", "备注"],
+      purchases.map(p => [
+        new Date(p.date).toLocaleDateString("zh-CN"),
+        p.product.name,
+        p.quantity,
+        p.amount.toFixed(2),
+        p.remark || "-",
+      ])
+    );
+  };
+
+  const exportExpenses = () => {
+    exportToCSV(
+      `直营费用记录_${new Date().toLocaleDateString("zh-CN")}`,
+      ["日期", "类别", "金额", "备注"],
+      expenses.map(e => [
+        new Date(e.date).toLocaleDateString("zh-CN"),
+        e.category,
+        e.amount.toFixed(2),
+        e.remark || "-",
+      ])
+    );
+  };
+
   return (
     <div>
       <PageHeader title="🏪 直营管理" />
@@ -178,19 +222,25 @@ export default function DirectPage() {
       </div>
 
       {/* Tab切换 */}
-      <div className="flex gap-1 mb-4 bg-gray-100 rounded-lg p-1 w-fit">
-        <button onClick={() => setActiveTab("sales")}
-          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === "sales" ? "bg-white shadow-sm text-blue-600" : "text-gray-600 hover:text-gray-900"}`}>
-          销售记录
-        </button>
-        <button onClick={() => setActiveTab("purchases")}
-          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === "purchases" ? "bg-white shadow-sm text-blue-600" : "text-gray-600 hover:text-gray-900"}`}>
-          采购发货
-        </button>
-        <button onClick={() => setActiveTab("expenses")}
-          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === "expenses" ? "bg-white shadow-sm text-blue-600" : "text-gray-600 hover:text-gray-900"}`}>
-          费用记录
-        </button>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit">
+          <button onClick={() => setActiveTab("sales")}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === "sales" ? "bg-white shadow-sm text-blue-600" : "text-gray-600 hover:text-gray-900"}`}>
+            销售记录
+          </button>
+          <button onClick={() => setActiveTab("purchases")}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === "purchases" ? "bg-white shadow-sm text-blue-600" : "text-gray-600 hover:text-gray-900"}`}>
+            采购发货
+          </button>
+          <button onClick={() => setActiveTab("expenses")}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === "expenses" ? "bg-white shadow-sm text-blue-600" : "text-gray-600 hover:text-gray-900"}`}>
+            费用记录
+          </button>
+        </div>
+        <ExportButton
+          onClick={activeTab === "sales" ? exportSales : activeTab === "purchases" ? exportPurchases : exportExpenses}
+          label={`导出${activeTab === "sales" ? "销售记录" : activeTab === "purchases" ? "采购发货" : "费用记录"}`}
+        />
       </div>
 
       {activeTab === "sales" ? (

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { PageHeader, formatMoney, EmptyState } from "@/components/ui";
+import { PageHeader, formatMoney, formatPercent, EmptyState, ExportButton, exportToCSV } from "@/components/ui";
 import Link from "next/link";
 
 interface Distributor {
@@ -54,14 +54,41 @@ export default function DistributionPage() {
     d.expensePlans.reduce((s, p) => s + p.amount, 0);
   const calcExpectedProfit = (d: Distributor) =>
     calcShipProfit(d) - calcTotalExpense(d) - calcTotalPlan(d);
+  const calcShipAmount = (d: Distributor) => d.shipments.reduce((s, sh) => s + sh.amount, 0);
+  // 毛利率 = 毛利 / 发货金额
+  const calcMarginRate = (d: Distributor) => {
+    const amount = calcShipAmount(d);
+    return amount === 0 ? 0 : (calcShipProfit(d) / amount) * 100;
+  };
+
+  const handleExport = () => {
+    exportToCSV(
+      `分销客户汇总_${new Date().toLocaleDateString("zh-CN")}`,
+      ["客户名称", "区域", "累计发货金额", "累计成本", "累计毛利", "毛利率", "已发生费用", "规划费用", "预计利润"],
+      distributors.map(d => [
+        d.name,
+        d.region || "-",
+        calcShipAmount(d).toFixed(2),
+        (calcShipAmount(d) - calcShipProfit(d)).toFixed(2),
+        calcShipProfit(d).toFixed(2),
+        calcMarginRate(d).toFixed(1) + "%",
+        calcTotalExpense(d).toFixed(2),
+        calcTotalPlan(d).toFixed(2),
+        calcExpectedProfit(d).toFixed(2),
+      ])
+    );
+  };
 
   return (
     <div>
       <PageHeader title="🚚 分销管理" action={
-        <button onClick={() => setShowForm(!showForm)}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition-colors">
-          {showForm ? "取消" : "+ 新增客户"}
-        </button>
+        <div className="flex items-center gap-2">
+          <ExportButton onClick={handleExport} label="导出客户汇总" />
+          <button onClick={() => setShowForm(!showForm)}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition-colors">
+            {showForm ? "取消" : "+ 新增客户"}
+          </button>
+        </div>
       } />
 
       {showForm && (
@@ -100,6 +127,7 @@ export default function DistributionPage() {
                 <th className="text-left px-4 py-3">区域</th>
                 <th className="text-right px-4 py-3">累计发货金额</th>
                 <th className="text-right px-4 py-3">累计毛利</th>
+                <th className="text-right px-4 py-3">毛利率</th>
                 <th className="text-right px-4 py-3">已发生费用</th>
                 <th className="text-right px-4 py-3">规划费用</th>
                 <th className="text-right px-4 py-3">预计利润</th>
@@ -123,6 +151,7 @@ export default function DistributionPage() {
                     <td className="px-4 py-3 text-gray-500">{d.region || "-"}</td>
                     <td className="px-4 py-3 text-right">{formatMoney(shipAmount)}</td>
                     <td className="px-4 py-3 text-right text-emerald-600">{formatMoney(profit)}</td>
+                    <td className="px-4 py-3 text-right text-purple-600">{formatPercent(calcMarginRate(d))}</td>
                     <td className="px-4 py-3 text-right text-red-600">{formatMoney(expense)}</td>
                     <td className="px-4 py-3 text-right text-amber-600">{formatMoney(plan)}</td>
                     <td className={`px-4 py-3 text-right font-medium ${expectedProfit >= 0 ? "text-emerald-600" : "text-red-600"}`}>
