@@ -1,6 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { StatCard, SectionCard, formatMoney } from "@/components/ui";
 
+// 该页面数据是实时的，且构建阶段可能连不上生产数据库/表结构还未迁移，
+// 所以禁止在 `next build` 时静态预渲染，改为每次请求时动态渲染。
+export const dynamic = "force-dynamic";
+
 async function getDashboardData() {
   // ===== 直营数据 =====
   const directSales = await prisma.directSale.findMany({

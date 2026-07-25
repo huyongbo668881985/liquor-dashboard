@@ -9,6 +9,7 @@ export default defineConfig({
     path: "prisma/migrations",
   },
   datasource: {
-    url: env("DATABASE_URL"),
+    // db push / migrate 走直连（5432），避免 pgbouncer 连接池不支持 DDL 操作导致卡住
+    url: env("DIRECT_URL"),
   },
 });
