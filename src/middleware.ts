@@ -6,18 +6,13 @@ const publicPaths = ["/login", "/api/login", "/api/logout"];
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // 公开路径不拦截
-  if (publicPaths.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
-    return NextResponse.next();
-  }
-
-  // 静态资源不拦截
+  // 公开路径、静态资源不拦截
   if (
+    publicPaths.some((p) => pathname === p || pathname.startsWith(p + "/")) ||
     pathname.startsWith("/_next/") ||
-    pathname.startsWith("/favicon") ||
-    pathname === "/"
+    pathname.startsWith("/favicon")
   ) {
-    // 即使是根路径也要检查，但先检查 cookie
+    return NextResponse.next();
   }
 
   const authToken = request.cookies.get("auth_token")?.value;
@@ -41,11 +36,6 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * 匹配所有路径，排除:
-     * - _next/static (静态文件)
-     * - _next/image (图片优化)
-     */
-    "/((?!_next/static|_next/image).*)",
+    "/((?!_next/static|_next/image|favicon.ico).*)",
   ],
 };
