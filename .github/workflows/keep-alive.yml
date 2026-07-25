@@ -1,0 +1,31 @@
+name: Keep Supabase Alive
+
+# 每周一、周四各跑一次，确保数据库连续活跃时间不会超过 Supabase 免费版 7 天暂停的阈值
+on:
+  schedule:
+    - cron: "0 3 * * 1,4"
+  workflow_dispatch: {} # 也支持在 GitHub Actions 页面手动点一下立即触发，方便测试
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login and query database
+        run: |
+          set -e
+          COOKIE_JAR=$(mktemp)
+
+          # 1. 登录，拿到 auth_token cookie
+          curl -sS -f -c "$COOKIE_JAR" -X POST "${SITE_URL}/api/login" \
+            -H "Content-Type: application/json" \
+            -d "{\"username\":\"${AUTH_USERNAME}\",\"password\":\"${AUTH_PASSWORD}\"}" \
+            -o /dev/null
+
+          # 2. 带着 cookie 请求一个会真正查数据库的接口，触发 Supabase 记为"活跃"
+          curl -sS -f -b "$COOKIE_JAR" "${SITE_URL}/api/products" -o /dev/null
+
+          echo "Keep-alive ping 完成"
+        env:
+          SITE_URL: ${{ secrets.SITE_URL }}
+          AUTH_USERNAME: ${{ secrets.KEEPALIVE_AUTH_USERNAME }}
+          AUTH_PASSWORD: ${{ secrets.KEEPALIVE_AUTH_PASSWORD }}
