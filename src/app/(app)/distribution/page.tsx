@@ -68,13 +68,13 @@ export default function DistributionPage() {
       distributors.map(d => [
         d.name,
         d.region || "-",
-        calcShipAmount(d).toFixed(2),
-        (calcShipAmount(d) - calcShipProfit(d)).toFixed(2),
-        calcShipProfit(d).toFixed(2),
+        Math.round(calcShipAmount(d)),
+        (Math.round(calcShipAmount(d) - calcShipProfit(d))),
+        Math.round(calcShipProfit(d)),
         calcMarginRate(d).toFixed(1) + "%",
-        calcTotalExpense(d).toFixed(2),
-        calcTotalPlan(d).toFixed(2),
-        calcExpectedProfit(d).toFixed(2),
+        Math.round(calcTotalExpense(d)),
+        Math.round(calcTotalPlan(d)),
+        Math.round(calcExpectedProfit(d)),
       ])
     );
   };

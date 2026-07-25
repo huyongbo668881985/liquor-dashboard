@@ -153,11 +153,11 @@ export default function DirectPage() {
         new Date(s.date).toLocaleDateString("zh-CN"),
         s.product.name,
         s.quantity,
-        s.amount.toFixed(2),
-        calcCost(s).toFixed(2),
-        calcProfit(s).toFixed(2),
-        s.received.toFixed(2),
-        calcReceivable(s).toFixed(2),
+        Math.round(s.amount),
+        Math.round(calcCost(s)),
+        Math.round(calcProfit(s)),
+        Math.round(s.received),
+        Math.round(calcReceivable(s)),
       ])
     );
   };
@@ -170,7 +170,7 @@ export default function DirectPage() {
         new Date(p.date).toLocaleDateString("zh-CN"),
         p.product.name,
         p.quantity,
-        p.amount.toFixed(2),
+        Math.round(p.amount),
         p.remark || "-",
       ])
     );
@@ -183,7 +183,7 @@ export default function DirectPage() {
       expenses.map(e => [
         new Date(e.date).toLocaleDateString("zh-CN"),
         e.category,
-        e.amount.toFixed(2),
+        Math.round(e.amount),
         e.remark || "-",
       ])
     );

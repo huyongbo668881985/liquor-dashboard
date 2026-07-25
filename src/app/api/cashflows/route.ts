@@ -22,6 +22,15 @@ export async function POST(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const id = parseInt(searchParams.get("id") || "0");
+
+  const record = await prisma.cashFlow.findUnique({ where: { id } });
+  if (record?.sourceType) {
+    return NextResponse.json(
+      { error: "该记录由其他模块自动生成，请到对应的销售/费用/发货记录里删除源记录" },
+      { status: 400 }
+    );
+  }
+
   await prisma.cashFlow.delete({ where: { id } });
   return NextResponse.json({ success: true });
 }

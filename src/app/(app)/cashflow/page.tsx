@@ -9,6 +9,7 @@ interface CashFlow {
   type: string;
   amount: number;
   remark: string;
+  sourceType: string | null;
 }
 
 export default function CashflowPage() {
@@ -42,7 +43,12 @@ export default function CashflowPage() {
 
   const handleDelete = async (id: number) => {
     if (!confirm("确定删除？")) return;
-    await fetch(`/api/cashflows?id=${id}`, { method: "DELETE" });
+    const res = await fetch(`/api/cashflows?id=${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const data = await res.json();
+      alert(data.error || "删除失败");
+      return;
+    }
     loadData();
   };
 
@@ -151,12 +157,21 @@ export default function CashflowPage() {
                         {r.type === "in" ? "收入" : "支出"}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-gray-500">{r.remark || "-"}</td>
+                    <td className="px-4 py-3 text-gray-500">
+                      {r.remark || "-"}
+                      {r.sourceType && (
+                        <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] bg-blue-50 text-blue-500 border border-blue-100">自动同步</span>
+                      )}
+                    </td>
                     <td className={`px-4 py-3 text-right font-medium ${r.type === "in" ? "text-emerald-600" : "text-red-600"}`}>
                       {r.type === "in" ? "+" : "-"}{formatMoney(r.amount)}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <button onClick={() => handleDelete(r.id)} className="text-red-500 hover:text-red-700 text-xs">删除</button>
+                      {r.sourceType ? (
+                        <span className="text-gray-300 text-xs" title="请到对应模块删除源记录">-</span>
+                      ) : (
+                        <button onClick={() => handleDelete(r.id)} className="text-red-500 hover:text-red-700 text-xs">删除</button>
+                      )}
                     </td>
                   </tr>
                 ))}

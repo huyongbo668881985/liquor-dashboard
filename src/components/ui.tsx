@@ -34,7 +34,7 @@ export function SectionCard({ title, children }: { title: string; children: Reac
 }
 
 export function formatMoney(n: number): string {
-  return `¥${n.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `¥${Math.round(n).toLocaleString("zh-CN")}`;
 }
 
 export function formatPercent(n: number): string {

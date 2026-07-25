@@ -102,10 +102,14 @@ model DistributorExpense {
 }
 
 model CashFlow {
-  id        Int      @id @default(autoincrement())
-  date      DateTime
-  type      String
-  amount    Float
-  remark    String   @default("")
-  createdAt DateTime @default(now())
+  id         Int      @id @default(autoincrement())
+  date       DateTime
+  type       String
+  amount     Float
+  remark     String   @default("")
+  createdAt  DateTime @default(now())
+  // 自动同步来源标记：direct_sale / direct_expense / direct_purchase / shipment / distributor_expense
+  // 手动录入的记录这两个字段为 null
+  sourceType String?
+  sourceId   Int?
 }

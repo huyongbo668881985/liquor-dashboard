@@ -188,9 +188,9 @@ export default function DistributorDetailPage() {
         new Date(sh.date).toLocaleDateString("zh-CN"),
         sh.product.name,
         sh.quantity,
-        sh.amount.toFixed(2),
-        (sh.quantity * sh.product.cost).toFixed(2),
-        (sh.amount - sh.quantity * sh.product.cost).toFixed(2),
+        Math.round(sh.amount),
+        (Math.round(sh.quantity * sh.product.cost)),
+        (Math.round(sh.amount - sh.quantity * sh.product.cost)),
       ])
     );
   };
@@ -199,7 +199,7 @@ export default function DistributorDetailPage() {
     exportToCSV(
       `${distributor?.name || "客户"}_费用规划`,
       ["费用名称", "规划金额", "备注"],
-      plans.map(p => [p.name, p.amount.toFixed(2), p.remark || "-"])
+      plans.map(p => [p.name, Math.round(p.amount), p.remark || "-"])
     );
   };
 
@@ -211,7 +211,7 @@ export default function DistributorDetailPage() {
         new Date(e.date).toLocaleDateString("zh-CN"),
         e.type === "cash" ? "现金" : "酒水",
         e.type === "cash" ? e.remark : (e.product ? `${e.product.name} × ${e.quantity}` : "-"),
-        e.amount.toFixed(2),
+        Math.round(e.amount),
         e.type === "product" ? e.remark || "-" : "-",
       ])
     );
