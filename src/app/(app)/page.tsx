@@ -6,15 +6,22 @@ import { StatCard, SectionCard, formatMoney } from "@/components/ui";
 export const dynamic = "force-dynamic";
 
 async function getDashboardData() {
-  // ===== 直营数据 =====
-  const directSales = await prisma.directSale.findMany({
-    include: { product: true },
-  });
-  const directExpenses = await prisma.directExpense.findMany();
-  const directPurchases = await prisma.directPurchase.findMany({
-    include: { product: true },
-  });
+  // 5 个查询之间互不依赖，改成并行发出，不用排队等
+  const [directSales, directExpenses, directPurchases, distributors, manualFlows] = await Promise.all([
+    prisma.directSale.findMany({ include: { product: true } }),
+    prisma.directExpense.findMany(),
+    prisma.directPurchase.findMany({ include: { product: true } }),
+    prisma.distributor.findMany({
+      include: {
+        shipments: { include: { product: true } },
+        expensePlans: true,
+        distributorExpenses: { include: { product: true } },
+      },
+    }),
+    prisma.cashFlow.findMany(),
+  ]);
 
+  // ===== 直营数据 =====
   const directTotalAmount = directSales.reduce((s, r) => s + r.amount, 0);
   const directTotalReceived = directSales.reduce((s, r) => s + r.received, 0);
   const directTotalReceivable = directTotalAmount - directTotalReceived;
@@ -25,14 +32,6 @@ async function getDashboardData() {
   const directPurchaseTotal = directPurchases.reduce((s, p) => s + p.amount, 0);
 
   // ===== 分销数据 =====
-  const distributors = await prisma.distributor.findMany({
-    include: {
-      shipments: { include: { product: true } },
-      expensePlans: true,
-      distributorExpenses: { include: { product: true } },
-    },
-  });
-
   const distTotalShipAmount = distributors.reduce((s, d) =>
     s + d.shipments.reduce((ss, sh) => ss + sh.amount, 0), 0);
   const distTotalShipCost = distributors.reduce((s, d) =>
@@ -59,7 +58,6 @@ async function getDashboardData() {
   const autoCashOut = directPurchaseTotal + directTotalExpense + distTotalShipCost + distTotalExpense;
 
   // 手动流水记录作为调整项（比如初始资金注入、其他收支）
-  const manualFlows = await prisma.cashFlow.findMany();
   let manualBalance = 0;
   for (const cf of manualFlows) {
     if (cf.type === "in") manualBalance += cf.amount;
