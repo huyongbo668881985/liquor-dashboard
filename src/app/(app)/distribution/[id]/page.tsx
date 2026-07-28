@@ -177,8 +177,9 @@ export default function DistributorDetailPage() {
   const totalShipProfit = totalShipAmount - totalShipCost;
   const totalPlanAmount = plans.reduce((s, p) => s + p.amount, 0);
   const totalExpenseAmount = expenses.reduce((s, e) => s + e.amount, 0);
-  // 毛利率 = 毛利 / 发货金额
-  const marginRate = totalShipAmount === 0 ? 0 : (totalShipProfit / totalShipAmount) * 100;
+  const expectedProfit = totalShipProfit - totalExpenseAmount - totalPlanAmount;
+  // 利润率 = 预计利润（毛利-已发生费用-规划费用）/ 发货金额
+  const profitRate = totalShipAmount === 0 ? 0 : (expectedProfit / totalShipAmount) * 100;
 
   const exportShipments = () => {
     exportToCSV(
@@ -244,18 +245,18 @@ export default function DistributorDetailPage() {
           <div className="text-lg font-bold text-purple-600">{formatMoney(totalShipProfit)}</div>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <div className="text-xs text-gray-500">毛利率</div>
-          <div className="text-lg font-bold text-purple-600">{formatPercent(marginRate)}</div>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
           <div className="text-xs text-gray-500">已发生费用</div>
           <div className="text-lg font-bold text-red-600">{formatMoney(totalExpenseAmount)}</div>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <div className="text-xs text-gray-500">预计利润</div>
-          <div className={`text-lg font-bold ${totalShipProfit - totalExpenseAmount - totalPlanAmount >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-            {formatMoney(totalShipProfit - totalExpenseAmount - totalPlanAmount)}
+          <div className={`text-lg font-bold ${expectedProfit >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+            {formatMoney(expectedProfit)}
           </div>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <div className="text-xs text-gray-500">利润率</div>
+          <div className={`text-lg font-bold ${expectedProfit >= 0 ? "text-emerald-600" : "text-red-600"}`}>{formatPercent(profitRate)}</div>
         </div>
       </div>
 

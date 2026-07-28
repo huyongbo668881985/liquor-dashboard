@@ -55,26 +55,26 @@ export default function DistributionPage() {
   const calcExpectedProfit = (d: Distributor) =>
     calcShipProfit(d) - calcTotalExpense(d) - calcTotalPlan(d);
   const calcShipAmount = (d: Distributor) => d.shipments.reduce((s, sh) => s + sh.amount, 0);
-  // 毛利率 = 毛利 / 发货金额
-  const calcMarginRate = (d: Distributor) => {
+  // 利润率 = 预计利润（毛利-已发生费用-规划费用）/ 发货金额
+  const calcProfitRate = (d: Distributor) => {
     const amount = calcShipAmount(d);
-    return amount === 0 ? 0 : (calcShipProfit(d) / amount) * 100;
+    return amount === 0 ? 0 : (calcExpectedProfit(d) / amount) * 100;
   };
 
   const handleExport = () => {
     exportToCSV(
       `分销客户汇总_${new Date().toLocaleDateString("zh-CN")}`,
-      ["客户名称", "区域", "累计发货金额", "累计成本", "累计毛利", "毛利率", "已发生费用", "规划费用", "预计利润"],
+      ["客户名称", "区域", "累计发货金额", "累计成本", "累计毛利", "已发生费用", "规划费用", "预计利润", "利润率"],
       distributors.map(d => [
         d.name,
         d.region || "-",
         Math.round(calcShipAmount(d)),
         (Math.round(calcShipAmount(d) - calcShipProfit(d))),
         Math.round(calcShipProfit(d)),
-        calcMarginRate(d).toFixed(1) + "%",
         Math.round(calcTotalExpense(d)),
         Math.round(calcTotalPlan(d)),
         Math.round(calcExpectedProfit(d)),
+        calcProfitRate(d).toFixed(1) + "%",
       ])
     );
   };
@@ -127,10 +127,10 @@ export default function DistributionPage() {
                 <th className="text-left px-4 py-3">区域</th>
                 <th className="text-right px-4 py-3">累计发货金额</th>
                 <th className="text-right px-4 py-3">累计毛利</th>
-                <th className="text-right px-4 py-3">毛利率</th>
                 <th className="text-right px-4 py-3">已发生费用</th>
                 <th className="text-right px-4 py-3">规划费用</th>
                 <th className="text-right px-4 py-3">预计利润</th>
+                <th className="text-right px-4 py-3">利润率</th>
                 <th className="text-center px-4 py-3">操作</th>
               </tr>
             </thead>
@@ -151,11 +151,13 @@ export default function DistributionPage() {
                     <td className="px-4 py-3 text-gray-500">{d.region || "-"}</td>
                     <td className="px-4 py-3 text-right">{formatMoney(shipAmount)}</td>
                     <td className="px-4 py-3 text-right text-emerald-600">{formatMoney(profit)}</td>
-                    <td className="px-4 py-3 text-right text-purple-600">{formatPercent(calcMarginRate(d))}</td>
                     <td className="px-4 py-3 text-right text-red-600">{formatMoney(expense)}</td>
                     <td className="px-4 py-3 text-right text-amber-600">{formatMoney(plan)}</td>
                     <td className={`px-4 py-3 text-right font-medium ${expectedProfit >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                       {formatMoney(expectedProfit)}
+                    </td>
+                    <td className={`px-4 py-3 text-right font-medium ${expectedProfit >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                      {formatPercent(calcProfitRate(d))}
                     </td>
                     <td className="px-4 py-3 text-center">
                       <button onClick={() => handleDelete(d.id)} className="text-red-500 hover:text-red-700 text-xs">删除</button>
