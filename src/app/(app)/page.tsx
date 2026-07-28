@@ -51,21 +51,21 @@ async function getDashboardData() {
   const currentProfit = directNetProfit + (distGrossProfit - distTotalExpense);
   const expectedProfit = directNetProfit + distExpectedProfit;
 
-  // ===== 现金流（自动计算） =====
-  // 现金流入：直营已收 + 分销发货金额
-  const autoCashIn = directTotalReceived + distTotalShipAmount;
-  // 现金流出：直营采购成本 + 直营费用 + 分销成本 + 分销费用
-  const autoCashOut = directPurchaseTotal + directTotalExpense + distTotalShipCost + distTotalExpense;
-
-  // 手动流水记录作为调整项（比如初始资金注入、其他收支）
-  let manualBalance = 0;
+  // ===== 现金流 =====
+  // CashFlow 表现在是唯一账本：直营销售回款/费用/采购、分销毛利/费用 在录入时都已经自动同步进去了，
+  // 首页不再从原始数据重新推算一遍，直接把这张表加总即可，避免重复计入
+  let cashBalance = 0;
+  let cashInTotal = 0;
+  let cashOutTotal = 0;
   for (const cf of manualFlows) {
-    if (cf.type === "in") manualBalance += cf.amount;
-    else manualBalance -= cf.amount;
+    if (cf.type === "in") {
+      cashBalance += cf.amount;
+      cashInTotal += cf.amount;
+    } else {
+      cashBalance -= cf.amount;
+      cashOutTotal += cf.amount;
+    }
   }
-
-  // 现金余额 = 自动计算净现金流 + 手动调整
-  const cashBalance = (autoCashIn - autoCashOut) + manualBalance;
 
   // 应收 = 预期可收到的钱
   const receivable = directTotalReceivable;
@@ -105,8 +105,8 @@ async function getDashboardData() {
     },
     cash: {
       balance: cashBalance,
-      autoIn: autoCashIn,
-      autoOut: autoCashOut,
+      autoIn: cashInTotal,
+      autoOut: cashOutTotal,
       receivable,
       futurePlan,
       pressure: cashPressure,
