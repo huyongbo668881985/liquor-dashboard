@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checkRateLimit, recordFailedAttempt, validateCredentials, resetAttempts } from "@/lib/auth";
+import { checkRateLimit, recordFailedAttempt, validateCredentials, resetAttempts, signToken } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
   const { username, password } = await req.json();
@@ -38,17 +38,16 @@ export async function POST(req: NextRequest) {
 
   const response = NextResponse.json({ success: true });
 
-  // 设置 cookie，7 天有效期
-  const authToken = Buffer.from(
-    JSON.stringify({
-      u: username,
-      t: Date.now() + 7 * 24 * 60 * 60 * 1000,
-    })
-  ).toString("base64");
+  // 设置 cookie，7 天有效期（token 为 HMAC 签名，无法伪造）
+  const authToken = await signToken({
+    u: username,
+    t: Date.now() + 7 * 24 * 60 * 60 * 1000,
+  });
 
   response.cookies.set("auth_token", authToken, {
     httpOnly: true,
-    secure: false, // 内网部署，不需要 HTTPS
+    // 生产环境（HTTPS）强制 secure，本地 HTTP 开发时不限制
+    secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     maxAge: 7 * 24 * 60 * 60,
     path: "/",
