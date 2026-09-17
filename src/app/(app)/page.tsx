@@ -77,13 +77,13 @@ async function getDashboardData() {
   if (directNetReceived >= 0) cashInTotal += directNetReceived;
   else cashOutTotal += Math.abs(directNetReceived);
 
-  // 应收 = 预期可收到的钱
+  // 应收单独展示，不纳入现金压力测算：回款周期较长，不能视为近期可用现金
   const receivable = directTotalReceivable;
   // 未来计划支出
   const futurePlan = distTotalPlan;
 
-  // 现金压力 = 现金余额 + 应收 - 未来支出
-  const cashPressure = cashBalance + receivable - futurePlan;
+  // 预计现金压力 = 现金余额 - 未来支出
+  const cashPressure = cashBalance - futurePlan;
 
   return {
     direct: {
@@ -233,7 +233,7 @@ export default async function DashboardPage() {
           <StatCard title="未来计划支出" value={formatMoney(cash.futurePlan)} color="yellow" />
         </div>
         <div className="mt-3">
-          <StatCard title="预计现金压力（余额 + 应收 - 未来支出）" value={formatMoney(cash.pressure)}
+          <StatCard title="预计现金压力（余额 - 未来支出）" value={formatMoney(cash.pressure)}
             color={cash.pressure >= 0 ? "green" : "red"} />
         </div>
         {cash.pressure < 0 && (
