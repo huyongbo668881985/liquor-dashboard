@@ -24,6 +24,17 @@ npm run dev
 
 打开 http://localhost:3000 即可使用。
 
+### 连接进销存直营汇总
+
+直营订单、历史成本、收款和退款以 jxc-app 为唯一来源。复制 `.env.example` 中的下列变量到本地 `.env` 或部署环境；不要使用 `NEXT_PUBLIC_` 前缀：
+
+```bash
+JXC_API_BASE_URL="https://你的-jxc-app-地址"
+JXC_API_KEY="只读 API Key"
+```
+
+仪表盘会读取 jxc-app 的 `GET /api/v1/reports/direct-dashboard` 全历史汇总，并仅将其中的 `net_received_amount` 计入直营现金，避免与旧本地销售流水重复。
+
 ## 功能模块
 
 ### 📊 首页 Dashboard (`/`)

@@ -14,12 +14,25 @@ interface CashFlow {
 
 export default function CashflowPage() {
   const [records, setRecords] = useState<CashFlow[]>([]);
+  const [directNetReceived, setDirectNetReceived] = useState(0);
+  const [directDataError, setDirectDataError] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ date: "", type: "in", amount: "", remark: "" });
 
   const loadData = async () => {
-    const res = await fetch("/api/cashflows");
-    setRecords(await res.json());
+    const [cashflowsRes, directRes] = await Promise.all([
+      fetch("/api/cashflows"),
+      fetch("/api/direct-dashboard"),
+    ]);
+    setRecords(await cashflowsRes.json());
+    if (directRes.ok) {
+      const direct = await directRes.json();
+      setDirectNetReceived(Number(direct.cash_adjustments?.net_received_amount) || 0);
+      setDirectDataError("");
+    } else {
+      const data = await directRes.json();
+      setDirectDataError(data.error || "无法读取直营净实收");
+    }
   };
 
   useEffect(() => { loadData(); }, []);
@@ -56,12 +69,15 @@ export default function CashflowPage() {
   let cashBalance = 0;
   const futureExpenses: { date: string; remark: string; amount: number }[] = [];
   for (const r of records) {
+    // 直营订单已由进销存全历史汇总提供，旧自动流水保留备查但不能重复累计。
+    if (r.sourceType === "direct_sale") continue;
     if (r.type === "in") cashBalance += r.amount;
     else cashBalance -= r.amount;
     if (r.type === "out" && new Date(r.date) > new Date()) {
       futureExpenses.push({ date: r.date, remark: r.remark, amount: r.amount });
     }
   }
+  cashBalance += directNetReceived;
 
   const totalFutureExpense = futureExpenses.reduce((s, f) => s + f.amount, 0);
 
@@ -75,12 +91,17 @@ export default function CashflowPage() {
       } />
 
       {/* 资金概览 */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <div className="text-sm text-gray-500 mb-1">当前现金余额</div>
           <div className={`text-3xl font-bold ${cashBalance >= 0 ? "text-emerald-600" : "text-red-600"}`}>
             {formatMoney(cashBalance)}
           </div>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="text-sm text-gray-500 mb-1">直营净实收（进销存）</div>
+          <div className={`text-3xl font-bold ${directNetReceived >= 0 ? "text-emerald-600" : "text-red-600"}`}>{formatMoney(directNetReceived)}</div>
+          <div className="text-xs text-gray-400 mt-1">已收款 − 实际退款</div>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <div className="text-sm text-gray-500 mb-1">未来计划支出</div>
@@ -97,6 +118,7 @@ export default function CashflowPage() {
           )}
         </div>
       </div>
+      {directDataError && <div className="mb-6 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">⚠️ {directDataError}；当前余额暂未包含直营净实收。</div>}
 
       {/* 新增表单 */}
       {showForm && (

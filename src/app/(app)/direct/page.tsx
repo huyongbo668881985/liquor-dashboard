@@ -11,16 +11,6 @@ interface Product {
   cost: number;
 }
 
-interface DirectSale {
-  id: number;
-  date: string;
-  productId: number;
-  product: Product;
-  quantity: number;
-  amount: number;
-  received: number;
-}
-
 interface DirectExpense {
   id: number;
   date: string;
@@ -39,50 +29,55 @@ interface DirectPurchase {
   remark: string;
 }
 
+interface DirectOrderSummary {
+  order_count: number;
+  sales_amount: number;
+  received_amount: number;
+  receivable_amount: number;
+  cost_amount: number;
+  gross_profit: number;
+}
+
+interface DirectDashboard {
+  settled: DirectOrderSummary;
+  outstanding: DirectOrderSummary;
+  cash_adjustments: { refund_amount: number; net_received_amount: number };
+  meta: { unlinked_return_count: number };
+}
+
 const expenseCategories = ["市场推广", "招待", "人员", "物流", "其他"];
 
 export default function DirectPage() {
   const [products, setProducts] = useState<Product[]>([]);
-  const [sales, setSales] = useState<DirectSale[]>([]);
   const [expenses, setExpenses] = useState<DirectExpense[]>([]);
   const [purchases, setPurchases] = useState<DirectPurchase[]>([]);
+  const [dashboard, setDashboard] = useState<DirectDashboard | null>(null);
+  const [dashboardError, setDashboardError] = useState("");
   const [activeTab, setActiveTab] = useState<"sales" | "expenses" | "purchases">("sales");
 
-  const [saleForm, setSaleForm] = useState({ date: "", productId: "", quantity: "", amount: "", received: "" });
   const [expenseForm, setExpenseForm] = useState({ date: "", category: "市场推广", amount: "", remark: "" });
   const [purchaseForm, setPurchaseForm] = useState({ date: "", productId: "", quantity: "", amount: "", remark: "" });
 
   const loadData = async () => {
-    const [pRes, sRes, eRes, puRes] = await Promise.all([
+    const [pRes, dRes, eRes, puRes] = await Promise.all([
       fetch("/api/products"),
-      fetch("/api/direct-sales"),
+      fetch("/api/direct-dashboard"),
       fetch("/api/direct-expenses"),
       fetch("/api/direct-purchases"),
     ]);
     setProducts(await pRes.json());
-    setSales(await sRes.json());
+    if (dRes.ok) {
+      setDashboard(await dRes.json());
+      setDashboardError("");
+    } else {
+      const data = await dRes.json();
+      setDashboardError(data.error || "读取进销存直营汇总失败");
+    }
     setExpenses(await eRes.json());
     setPurchases(await puRes.json());
   };
 
   useEffect(() => { loadData(); }, []);
-
-  const handleSaleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    await fetch("/api/direct-sales", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        date: saleForm.date,
-        productId: parseInt(saleForm.productId),
-        quantity: parseInt(saleForm.quantity),
-        amount: parseFloat(saleForm.amount),
-        received: parseFloat(saleForm.received) || 0,
-      }),
-    });
-    setSaleForm({ date: "", productId: "", quantity: "", amount: "", received: "" });
-    loadData();
-  };
 
   const handleExpenseSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -117,12 +112,6 @@ export default function DirectPage() {
     loadData();
   };
 
-  const deleteSale = async (id: number) => {
-    if (!confirm("确定删除？")) return;
-    await fetch(`/api/direct-sales?id=${id}`, { method: "DELETE" });
-    loadData();
-  };
-
   const deleteExpense = async (id: number) => {
     if (!confirm("确定删除？")) return;
     await fetch(`/api/direct-expenses?id=${id}`, { method: "DELETE" });
@@ -135,32 +124,11 @@ export default function DirectPage() {
     loadData();
   };
 
-  const calcCost = (sale: DirectSale) => sale.quantity * sale.product.cost;
-  const calcProfit = (sale: DirectSale) => sale.amount - calcCost(sale);
-  const calcReceivable = (sale: DirectSale) => sale.amount - sale.received;
-
-  const totalAmount = sales.reduce((s, r) => s + r.amount, 0);
-  const totalCost = sales.reduce((s, r) => s + calcCost(r), 0);
-  const totalProfit = sales.reduce((s, r) => s + calcProfit(r), 0);
+  const totalAmount = dashboard ? dashboard.settled.sales_amount + dashboard.outstanding.sales_amount : 0;
+  const totalCost = dashboard ? dashboard.settled.cost_amount + dashboard.outstanding.cost_amount : 0;
+  const totalProfit = dashboard ? dashboard.settled.gross_profit + dashboard.outstanding.gross_profit : 0;
   const totalExpense = expenses.reduce((s, e) => s + e.amount, 0);
   const totalPurchaseAmount = purchases.reduce((s, p) => s + p.amount, 0);
-
-  const exportSales = () => {
-    exportToCSV(
-      `直营销售记录_${new Date().toLocaleDateString("zh-CN")}`,
-      ["日期", "产品", "数量", "销售金额", "成本", "毛利", "已收", "应收"],
-      sales.map(s => [
-        new Date(s.date).toLocaleDateString("zh-CN"),
-        s.product.name,
-        s.quantity,
-        Math.round(s.amount),
-        Math.round(calcCost(s)),
-        Math.round(calcProfit(s)),
-        Math.round(s.received),
-        Math.round(calcReceivable(s)),
-      ])
-    );
-  };
 
   const exportPurchases = () => {
     exportToCSV(
@@ -238,90 +206,16 @@ export default function DirectPage() {
           </button>
         </div>
         <ExportButton
-          onClick={activeTab === "sales" ? exportSales : activeTab === "purchases" ? exportPurchases : exportExpenses}
-          label={`导出${activeTab === "sales" ? "销售记录" : activeTab === "purchases" ? "采购发货" : "费用记录"}`}
+          onClick={activeTab === "purchases" ? exportPurchases : exportExpenses}
+          label={`导出${activeTab === "purchases" ? "采购发货" : "费用记录"}`}
         />
       </div>
 
       {activeTab === "sales" ? (
         <>
-          <SectionCard title="新增销售记录">
-            <form onSubmit={handleSaleSubmit} className="grid grid-cols-1 md:grid-cols-6 gap-3">
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">日期</label>
-                <input required type="date" value={saleForm.date}
-                  onChange={e => setSaleForm({ ...saleForm, date: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">产品</label>
-                <select required value={saleForm.productId}
-                  onChange={e => setSaleForm({ ...saleForm, productId: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="">选择产品</option>
-                  {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">数量</label>
-                <input required type="number" value={saleForm.quantity}
-                  onChange={e => setSaleForm({ ...saleForm, quantity: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">销售金额</label>
-                <input required type="number" step="0.01" value={saleForm.amount}
-                  onChange={e => setSaleForm({ ...saleForm, amount: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">已收金额</label>
-                <input type="number" step="0.01" value={saleForm.received}
-                  onChange={e => setSaleForm({ ...saleForm, received: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              </div>
-              <div className="flex items-end">
-                <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 w-full">添加</button>
-              </div>
-            </form>
+          <SectionCard title="直营订单汇总（来自进销存）">
+            {dashboardError ? <p className="text-sm text-red-600">{dashboardError}</p> : !dashboard ? <EmptyState message="正在读取进销存数据..." /> : <div className="overflow-x-auto"><table className="w-full text-sm"><thead className="bg-gray-50 text-gray-600"><tr><th className="text-left px-4 py-3">订单分类</th><th className="text-right px-4 py-3">订单数</th><th className="text-right px-4 py-3">净销售额</th><th className="text-right px-4 py-3">实际已收</th><th className="text-right px-4 py-3">未收金额</th><th className="text-right px-4 py-3">成本</th><th className="text-right px-4 py-3">毛利</th></tr></thead><tbody className="divide-y divide-gray-100">{[["已结清订单", dashboard.settled], ["未收款 / 部分收款订单", dashboard.outstanding]].map(([label, row]) => { const summary = row as DirectOrderSummary; return <tr key={label as string}><td className="px-4 py-3 font-medium">{label as string}</td><td className="px-4 py-3 text-right">{summary.order_count}</td><td className="px-4 py-3 text-right">{formatMoney(summary.sales_amount)}</td><td className="px-4 py-3 text-right text-emerald-600">{formatMoney(summary.received_amount)}</td><td className="px-4 py-3 text-right text-amber-600">{formatMoney(summary.receivable_amount)}</td><td className="px-4 py-3 text-right text-gray-500">{formatMoney(summary.cost_amount)}</td><td className="px-4 py-3 text-right text-purple-600">{formatMoney(summary.gross_profit)}</td></tr>; })}</tbody></table></div>}
           </SectionCard>
-
-          <div className="mt-4 bg-white rounded-xl border border-gray-200 overflow-x-auto">
-            {sales.length === 0 ? <EmptyState message="暂无销售记录" /> : (
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-gray-600">
-                  <tr>
-                    <th className="text-left px-4 py-3">日期</th>
-                    <th className="text-left px-4 py-3">产品</th>
-                    <th className="text-right px-4 py-3">数量</th>
-                    <th className="text-right px-4 py-3">销售金额</th>
-                    <th className="text-right px-4 py-3">成本</th>
-                    <th className="text-right px-4 py-3">毛利</th>
-                    <th className="text-right px-4 py-3">已收</th>
-                    <th className="text-right px-4 py-3">应收</th>
-                    <th className="text-center px-4 py-3">操作</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {sales.map(s => (
-                    <tr key={s.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3">{new Date(s.date).toLocaleDateString("zh-CN")}</td>
-                      <td className="px-4 py-3">{s.product.name}</td>
-                      <td className="px-4 py-3 text-right">{s.quantity}</td>
-                      <td className="px-4 py-3 text-right">{formatMoney(s.amount)}</td>
-                      <td className="px-4 py-3 text-right text-gray-500">{formatMoney(calcCost(s))}</td>
-                      <td className="px-4 py-3 text-right text-emerald-600">{formatMoney(calcProfit(s))}</td>
-                      <td className="px-4 py-3 text-right">{formatMoney(s.received)}</td>
-                      <td className="px-4 py-3 text-right text-amber-600">{formatMoney(calcReceivable(s))}</td>
-                      <td className="px-4 py-3 text-center">
-                        <button onClick={() => deleteSale(s.id)} className="text-red-500 hover:text-red-700 text-xs">删除</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
         </>
       ) : activeTab === "purchases" ? (
         <>

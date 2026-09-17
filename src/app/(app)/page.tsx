@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { StatCard, SectionCard, formatMoney } from "@/components/ui";
+import { getJxcDirectDashboard } from "@/lib/jxc";
 
 // 该页面数据是实时的，且构建阶段可能连不上生产数据库/表结构还未迁移，
 // 所以禁止在 `next build` 时静态预渲染，改为每次请求时动态渲染。
@@ -7,8 +8,8 @@ export const dynamic = "force-dynamic";
 
 async function getDashboardData() {
   // 5 个查询之间互不依赖，改成并行发出，不用排队等
-  const [directSales, directExpenses, directPurchases, distributors, manualFlows] = await Promise.all([
-    prisma.directSale.findMany({ include: { product: true } }),
+  const [jxcDirect, directExpenses, directPurchases, distributors, generalDistributionExpenses, manualFlows] = await Promise.all([
+    getJxcDirectDashboard(),
     prisma.directExpense.findMany(),
     prisma.directPurchase.findMany({ include: { product: true } }),
     prisma.distributor.findMany({
@@ -18,15 +19,16 @@ async function getDashboardData() {
         distributorExpenses: { include: { product: true } },
       },
     }),
+    prisma.distributionGeneralExpense.findMany(),
     prisma.cashFlow.findMany(),
   ]);
 
   // ===== 直营数据 =====
-  const directTotalAmount = directSales.reduce((s, r) => s + r.amount, 0);
-  const directTotalReceived = directSales.reduce((s, r) => s + r.received, 0);
-  const directTotalReceivable = directTotalAmount - directTotalReceived;
-  const directTotalCost = directSales.reduce((s, r) => s + r.quantity * r.product.cost, 0);
-  const directGrossProfit = directTotalAmount - directTotalCost;
+  const directTotalAmount = jxcDirect.settled.sales_amount + jxcDirect.outstanding.sales_amount;
+  const directTotalReceived = jxcDirect.settled.received_amount + jxcDirect.outstanding.received_amount;
+  const directTotalReceivable = jxcDirect.settled.receivable_amount + jxcDirect.outstanding.receivable_amount;
+  const directTotalCost = jxcDirect.settled.cost_amount + jxcDirect.outstanding.cost_amount;
+  const directGrossProfit = jxcDirect.settled.gross_profit + jxcDirect.outstanding.gross_profit;
   const directTotalExpense = directExpenses.reduce((s, e) => s + e.amount, 0);
   const directNetProfit = directGrossProfit - directTotalExpense;
   const directPurchaseTotal = directPurchases.reduce((s, p) => s + p.amount, 0);
@@ -37,8 +39,10 @@ async function getDashboardData() {
   const distTotalShipCost = distributors.reduce((s, d) =>
     s + d.shipments.reduce((ss, sh) => ss + sh.quantity * sh.product.cost, 0), 0);
   const distGrossProfit = distTotalShipAmount - distTotalShipCost;
-  const distTotalExpense = distributors.reduce((s, d) =>
+  const distClientExpense = distributors.reduce((s, d) =>
     s + d.distributorExpenses.reduce((ss, e) => ss + e.amount, 0), 0);
+  const distGeneralExpense = generalDistributionExpenses.reduce((s, e) => s + e.amount, 0);
+  const distTotalExpense = distClientExpense + distGeneralExpense;
   const distTotalPlan = distributors.reduce((s, d) =>
     s + d.expensePlans.reduce((ss, p) => ss + p.amount, 0), 0);
   const distExpectedProfit = distGrossProfit - distTotalExpense - distTotalPlan;
@@ -58,6 +62,8 @@ async function getDashboardData() {
   let cashInTotal = 0;
   let cashOutTotal = 0;
   for (const cf of manualFlows) {
+    // 直营销售已改由进销存全历史净实收统一提供，旧自动流水仅保留备查，不能重复计入。
+    if (cf.sourceType === "direct_sale") continue;
     if (cf.type === "in") {
       cashBalance += cf.amount;
       cashInTotal += cf.amount;
@@ -66,6 +72,10 @@ async function getDashboardData() {
       cashOutTotal += cf.amount;
     }
   }
+  const directNetReceived = jxcDirect.cash_adjustments.net_received_amount;
+  cashBalance += directNetReceived;
+  if (directNetReceived >= 0) cashInTotal += directNetReceived;
+  else cashOutTotal += Math.abs(directNetReceived);
 
   // 应收 = 预期可收到的钱
   const receivable = directTotalReceivable;
@@ -85,6 +95,10 @@ async function getDashboardData() {
       totalExpense: directTotalExpense,
       netProfit: directNetProfit,
       purchaseTotal: directPurchaseTotal,
+      settled: jxcDirect.settled,
+      outstanding: jxcDirect.outstanding,
+      refundAmount: jxcDirect.cash_adjustments.refund_amount,
+      unlinkedReturnCount: jxcDirect.meta.unlinked_return_count,
     },
     distribution: {
       clientCount: distributors.length,
@@ -92,6 +106,8 @@ async function getDashboardData() {
       totalCost: distTotalShipCost,
       grossProfit: distGrossProfit,
       totalExpense: distTotalExpense,
+      clientExpense: distClientExpense,
+      generalExpense: distGeneralExpense,
       totalPlan: distTotalPlan,
       expectedProfit: distExpectedProfit,
     },
@@ -128,7 +144,7 @@ export default async function DashboardPage() {
       {/* 直营经营 */}
       <SectionCard title="🏪 直营经营">
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-          <StatCard title="销售金额" value={formatMoney(direct.totalAmount)} color="blue" />
+          <StatCard title="净销售金额" value={formatMoney(direct.totalAmount)} color="blue" />
           <StatCard title="已收金额" value={formatMoney(direct.totalReceived)} color="green" />
           <StatCard title="应收金额" value={formatMoney(direct.totalReceivable)} color="yellow" />
           <StatCard title="销售成本" value={formatMoney(direct.totalCost)} color="gray" />
@@ -138,6 +154,40 @@ export default async function DashboardPage() {
           <StatCard title="净利润" value={formatMoney(direct.netProfit)}
             color={direct.netProfit >= 0 ? "green" : "red"} />
         </div>
+        <div className="mt-5 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-gray-600">
+              <tr>
+                <th className="text-left px-4 py-3">订单分类</th>
+                <th className="text-right px-4 py-3">订单数</th>
+                <th className="text-right px-4 py-3">净销售额</th>
+                <th className="text-right px-4 py-3">实际已收</th>
+                <th className="text-right px-4 py-3">未收金额</th>
+                <th className="text-right px-4 py-3">成本</th>
+                <th className="text-right px-4 py-3">毛利</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {[
+                ["已结清订单", direct.settled],
+                ["未收款 / 部分收款订单", direct.outstanding],
+              ].map(([label, summary]) => {
+                const row = summary as typeof direct.settled;
+                return <tr key={label as string}>
+                  <td className="px-4 py-3 font-medium">{label as string}</td>
+                  <td className="px-4 py-3 text-right">{row.order_count}</td>
+                  <td className="px-4 py-3 text-right">{formatMoney(row.sales_amount)}</td>
+                  <td className="px-4 py-3 text-right text-emerald-600">{formatMoney(row.received_amount)}</td>
+                  <td className="px-4 py-3 text-right text-amber-600">{formatMoney(row.receivable_amount)}</td>
+                  <td className="px-4 py-3 text-right text-gray-500">{formatMoney(row.cost_amount)}</td>
+                  <td className="px-4 py-3 text-right text-purple-600">{formatMoney(row.gross_profit)}</td>
+                </tr>;
+              })}
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-3 text-xs text-gray-500">数据来自进销存全历史已审核订单；实际退款 {formatMoney(direct.refundAmount)} 已从现金余额扣除。</p>
+        {direct.unlinkedReturnCount > 0 && <p className="mt-2 text-xs text-amber-700">⚠️ 进销存中有 {direct.unlinkedReturnCount} 笔未关联销售单的退货，请处理关联关系以保证两行订单汇总完整。</p>}
       </SectionCard>
 
       {/* 分销经营 */}
@@ -148,6 +198,7 @@ export default async function DashboardPage() {
           <StatCard title="商品成本" value={formatMoney(dist.totalCost)} color="gray" />
           <StatCard title="毛利" value={formatMoney(dist.grossProfit)} color="purple" />
           <StatCard title="已发生费用" value={formatMoney(dist.totalExpense)} color="red" />
+          <StatCard title="其中：整体费用" value={formatMoney(dist.generalExpense)} color="red" />
           <StatCard title="未来规划费用" value={formatMoney(dist.totalPlan)} color="yellow" />
           <StatCard title="预计最终利润" value={formatMoney(dist.expectedProfit)}
             color={dist.expectedProfit >= 0 ? "green" : "red"} />
@@ -171,7 +222,7 @@ export default async function DashboardPage() {
       {/* 现金情况 — 自动计算 */}
       <SectionCard title="💰 现金情况">
         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700">
-          💡 现金余额 = 已收货款 + 分销发货金额 - 采购成本 - 直营费用 - 分销成本 - 分销费用 (± 手动流水调整)
+          💡 现金余额 = 直营净实收（已收款－实际退款）+ 分销净毛利 - 采购与实际费用 (± 手动流水调整)
         </div>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <StatCard title="当前现金余额" value={formatMoney(cash.balance)}
