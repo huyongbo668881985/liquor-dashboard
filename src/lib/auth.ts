@@ -1,3 +1,5 @@
+import "server-only";
+
 // 认证模块
 // 使用 HMAC-SHA256 对 token 签名，避免被伪造（token 自带签名，服务端用密钥验签）。
 // 依赖 Web Crypto（crypto.subtle），在 Edge Runtime（middleware）和 Node Runtime（API 路由）均可运行。
@@ -69,9 +71,11 @@ export function validateCredentials(username: string, password: string): boolean
 const enc = new TextEncoder();
 
 function getSecret(): string {
-  // 部署时必须通过环境变量提供 AUTH_SECRET； development 下给一个明确标注的开发用值，
-  // 但生产环境务必配置真实随机值（见 .env.example）。
-  return process.env.AUTH_SECRET || "DEV_ONLY_INSECURE_SECRET_CHANGE_ME";
+  const secret = process.env.AUTH_SECRET;
+  if (!secret || secret === "DEV_ONLY_INSECURE_SECRET_CHANGE_ME" || secret.length < 32) {
+    throw new Error("AUTH_SECRET must be a private random value of at least 32 characters");
+  }
+  return secret;
 }
 
 function b64urlEncode(bytes: Uint8Array): string {
@@ -120,16 +124,17 @@ export async function signToken(payload: { u: string; t: number }): Promise<stri
 }
 
 export async function verifyToken(token: string): Promise<{ u: string; t: number } | null> {
-  const parts = token.split(".");
-  if (parts.length !== 2) return null;
-  const [body, sig] = parts;
-
-  const expected = await hmac(body);
-  if (!constantTimeEqual(sig, expected)) return null;
-
+  if (token.length > 4096) return null;
   try {
+    const parts = token.split(".");
+    if (parts.length !== 2) return null;
+    const [body, sig] = parts;
+    const expected = await hmac(body);
+    if (!constantTimeEqual(sig, expected)) return null;
+
     const payload = JSON.parse(b64urlDecode(body));
-    if (!payload.u || !payload.t || payload.t < Date.now()) return null;
+    if (typeof payload.u !== "string" || payload.u !== process.env.AUTH_USERNAME ||
+        typeof payload.t !== "number" || !Number.isFinite(payload.t) || payload.t <= Date.now()) return null;
     return payload;
   } catch {
     return null;

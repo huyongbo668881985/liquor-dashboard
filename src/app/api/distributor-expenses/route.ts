@@ -1,7 +1,10 @@
+import { authorizeApi } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(req: NextRequest) {
+  const denied = await authorizeApi(req);
+  if (denied) return denied;
   const { searchParams } = new URL(req.url);
   const distributorId = searchParams.get("distributorId");
   const where = distributorId ? { distributorId: parseInt(distributorId) } : {};
@@ -14,6 +17,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const denied = await authorizeApi(req);
+  if (denied) return denied;
   const body = await req.json();
   let amount = body.amount || 0;
 
@@ -61,6 +66,8 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const denied = await authorizeApi(req);
+  if (denied) return denied;
   const { searchParams } = new URL(req.url);
   const id = parseInt(searchParams.get("id") || "0");
 

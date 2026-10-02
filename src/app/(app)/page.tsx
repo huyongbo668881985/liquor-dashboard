@@ -1,3 +1,4 @@
+import { requireSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { StatCard, SectionCard, formatMoney } from "@/components/ui";
 import { getJxcDirectDashboard } from "@/lib/jxc";
@@ -7,6 +8,7 @@ import { getJxcDirectDashboard } from "@/lib/jxc";
 export const dynamic = "force-dynamic";
 
 async function getDashboardData() {
+  await requireSession();
   // 5 个查询之间互不依赖，改成并行发出，不用排队等
   const [jxcDirect, directExpenses, directPurchases, distributors, generalDistributionExpenses, manualFlows] = await Promise.all([
     getJxcDirectDashboard(),

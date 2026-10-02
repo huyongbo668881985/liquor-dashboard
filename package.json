@@ -9,7 +9,11 @@
     "lint": "eslint",
     "db:init": "prisma migrate dev",
     "db:reset": "prisma migrate reset --force",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/*.test.mjs",
+    "test:db-security": "node scripts/test-db-security.mjs",
+    "db:security": "node scripts/apply-db-security.mjs"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.0",
@@ -18,7 +22,8 @@
     "pg": "^8.22.0",
     "prisma": "^7.9.0",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "server-only": "^0.0.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

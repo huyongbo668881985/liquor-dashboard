@@ -6,8 +6,8 @@
 
 - **前端**: Next.js 16 + React 19 + Tailwind CSS 4
 - **后端**: Next.js API Routes
-- **数据库**: SQLite + Prisma 7 (libsql 适配器)
-- **部署**: 单机运行，无需服务器
+- **数据库**: Supabase PostgreSQL + Prisma 7 (`@prisma/adapter-pg`)
+- **部署**: Next.js 服务端（本地或 Vercel）
 
 ## 快速开始
 
@@ -15,14 +15,33 @@
 # 1. 安装依赖
 npm install
 
-# 2. 初始化数据库
-npx prisma migrate dev
+# 2. 配置 .env 中 DATABASE_URL、DIRECT_URL 和 AUTH_*（参见 .env.example）
+# 已有生产库不要使用 migrate reset；数据库安全部署见下方文档。
 
 # 3. 启动开发服务器
 npm run dev
 ```
 
 打开 http://localhost:3000 即可使用。
+
+### 数据库安全与部署
+
+浏览器只访问本项目已鉴权的 API；Prisma 使用服务端数据库连接。
+Supabase Data API 的 `anon` 和 `authenticated` 对所有业务表均无权限。
+本项目无需 anon、publishable 或 service_role key，也没有 Supabase Auth 用户映射。
+`AUTH_SECRET` 必须为至少 32 字符的随机私密值，不能使用 `NEXT_PUBLIC_` 前缀。
+
+安全迁移和线上验证记录见 [数据库安全报告](docs/supabase-security.md)。
+在其他环境应用同一份可重复执行的迁移（先确认 `DIRECT_URL` 对应目标项目）：
+
+```bash
+npm run db:security
+npm run test:db-security
+```
+
+已有数据库没有 Prisma migration baseline；这份 SQL 是独立安全迁移。
+不要直接用 `migrate deploy` 或 `migrate reset` 代替上述命令。
+新增业务表必须开启 RLS，并重新执行安全检查；不要授予公开 Data API 权限。
 
 ### 连接进销存直营汇总
 

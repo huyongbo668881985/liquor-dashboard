@@ -4,7 +4,7 @@ import { verifyToken } from "@/lib/auth";
 
 const publicPaths = ["/login", "/api/login", "/api/logout"];
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // 公开路径、静态资源不拦截
@@ -19,13 +19,17 @@ export async function middleware(request: NextRequest) {
   const authToken = request.cookies.get("auth_token")?.value;
 
   if (!authToken) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    return pathname.startsWith("/api/")
+      ? NextResponse.json({ error: "请先登录" }, { status: 401 })
+      : NextResponse.redirect(new URL("/login", request.url));
   }
 
   // 验证 token 签名与有效期（HMAC 验签，无法伪造）
   const payload = await verifyToken(authToken);
   if (!payload) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    return pathname.startsWith("/api/")
+      ? NextResponse.json({ error: "请先登录" }, { status: 401 })
+      : NextResponse.redirect(new URL("/login", request.url));
   }
 
   return NextResponse.next();

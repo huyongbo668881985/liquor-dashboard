@@ -1,3 +1,5 @@
+import "server-only";
+
 export interface DirectOrderSummary {
   order_count: number;
   sales_amount: number;
