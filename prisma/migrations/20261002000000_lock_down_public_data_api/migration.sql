@@ -43,5 +43,27 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
 
 -- No permissive policies: RLS defaults to deny for API roles. The existing
 -- server-only postgres connection has BYPASSRLS and keeps its CRUD privileges.
+
+-- The blanket revoke above also removes the keep-alive exception. Restore it
+-- when that table exists so `npm run db:security` does not stop the heartbeat.
+-- Keep this block in sync with
+-- prisma/migrations/20261029120000_keep_alive_heartbeat/migration.sql.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public' AND c.relname = 'KeepAlive'
+  ) THEN
+    EXECUTE 'REVOKE ALL ON TABLE public."KeepAlive" FROM PUBLIC, anon, authenticated, service_role';
+    EXECUTE 'GRANT SELECT, UPDATE ON TABLE public."KeepAlive" TO anon';
+    EXECUTE 'DROP POLICY IF EXISTS keepalive_select ON public."KeepAlive"';
+    EXECUTE 'DROP POLICY IF EXISTS keepalive_update ON public."KeepAlive"';
+    EXECUTE 'CREATE POLICY keepalive_select ON public."KeepAlive" FOR SELECT TO anon USING (id = 1)';
+    EXECUTE 'CREATE POLICY keepalive_update ON public."KeepAlive" FOR UPDATE TO anon USING (id = 1) WITH CHECK (id = 1)';
+  END IF;
+END $$;
+
 NOTIFY pgrst, 'reload schema';
 COMMIT;

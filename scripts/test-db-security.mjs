@@ -12,12 +12,29 @@ try {
   await client.query('BEGIN');
   const role = (await client.query("SELECT rolbypassrls FROM pg_roles WHERE rolname=current_user")).rows[0];
   assert.equal(role.rolbypassrls, true, 'Server database connection must bypass RLS');
-  const sql = readFileSync('prisma/migrations/20261002000000_lock_down_public_data_api/migration.sql', 'utf8')
-    .replace(/^BEGIN;$/m, '').replace(/^COMMIT;$/m, '');
-  await client.query(sql);
-  await client.query(sql);
+  const stripTxn = (file) => readFileSync(file, 'utf8').replace(/^BEGIN;$/m, '').replace(/^COMMIT;$/m, '');
+  const securitySql = stripTxn('prisma/migrations/20261002000000_lock_down_public_data_api/migration.sql');
+  const heartbeatSql = stripTxn('prisma/migrations/20261029120000_keep_alive_heartbeat/migration.sql');
+  // Security first, then the heartbeat table, then security again: the second
+  // pass must restore the one-row anon grant instead of wiping it.
+  await client.query(securitySql);
+  await client.query(heartbeatSql);
+  await client.query(securitySql);
   const tables = (await client.query("SELECT relname,relrowsecurity FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND relkind IN ('r','p')")).rows;
-  assert.equal(tables.length, 10, 'Unexpected table inventory: review all additional tables');
+  const names = tables.map((t) => t.relname).sort();
+  assert.deepEqual(names, [
+    'CashFlow',
+    'DirectExpense',
+    'DirectPurchase',
+    'DirectSale',
+    'DistributionGeneralExpense',
+    'Distributor',
+    'DistributorExpense',
+    'ExpensePlan',
+    'KeepAlive',
+    'Product',
+    'Shipment',
+  ], 'Unexpected table inventory: review all additional tables');
   assert.ok(tables.every(t => t.relrowsecurity));
   for (const roleName of ['anon', 'authenticated']) {
     for (const table of tables) {
@@ -29,15 +46,33 @@ try {
         `DELETE FROM ${tableSql} WHERE false`,
         `TRUNCATE ${tableSql}`,
       ]) {
+        const heartbeatReadWrite = roleName === 'anon' && table.relname === 'KeepAlive' &&
+          (statement.startsWith('SELECT') || statement.startsWith('UPDATE'));
         await client.query('SAVEPOINT denied');
         await client.query(`SET LOCAL ROLE ${roleName}`);
         let code;
         try { await client.query(statement); } catch (error) { code = error.code; }
         await client.query('ROLLBACK TO SAVEPOINT denied');
-        assert.equal(code, '42501', `${roleName}: ${statement} must be denied`);
+        if (heartbeatReadWrite) {
+          assert.equal(code, undefined, `${roleName}: ${statement} must be allowed`);
+        } else {
+          assert.equal(code, '42501', `${roleName}: ${statement} must be denied`);
+        }
       }
     }
   }
+  await client.query('SAVEPOINT heartbeat');
+  await client.query('SET LOCAL ROLE anon');
+  const beat = await client.query('UPDATE public."KeepAlive" SET "pingedAt" = now() WHERE id = 1 RETURNING id');
+  assert.equal(beat.rowCount, 1);
+  let moveCode;
+  try {
+    await client.query('UPDATE public."KeepAlive" SET id = 2 WHERE id = 1');
+  } catch (error) {
+    moveCode = error.code;
+  }
+  assert.equal(moveCode, '42501', 'anon must not move the heartbeat row off id 1');
+  await client.query('ROLLBACK TO SAVEPOINT heartbeat');
   // Negative explicit IDs avoid modifying production sequences. No rows survive rollback.
   const id = -2147483000;
   const rows = {
@@ -61,7 +96,7 @@ try {
   for (const table of Object.keys(rows).reverse()) {
     assert.equal((await client.query(`DELETE FROM public.${quote(table)} WHERE id=$1`, [id])).rowCount, 1);
   }
-  console.log('PASS: migration idempotence, RLS on 10 tables, 100 denied API-role operations, server CRUD on all 10 tables');
+  console.log('PASS: migration idempotence, RLS on 11 tables, business API roles denied, anon heartbeat update only, server CRUD on 10 business tables');
 } finally {
   await client.query('ROLLBACK');
   await client.end();

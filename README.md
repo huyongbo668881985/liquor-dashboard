@@ -28,7 +28,9 @@ npm run dev
 
 浏览器只访问本项目已鉴权的 API；Prisma 使用服务端数据库连接。
 Supabase Data API 的 `anon` 和 `authenticated` 对所有业务表均无权限。
-本项目无需 anon、publishable 或 service_role key，也没有 Supabase Auth 用户映射。
+唯一例外是 `KeepAlive` 心跳表：`anon` 只能读取并更新 `id = 1` 的时间戳，供每天的保活 workflow 使用。
+网站本身不需要 anon、publishable 或 service_role key，也没有 Supabase Auth 用户映射。
+保活 workflow 需要仓库 secret `SUPABASE_ANON_KEY`（anon public key 或 publishable key），不要把 service_role key 放进 GitHub。
 `AUTH_SECRET` 必须为至少 32 字符的随机私密值，不能使用 `NEXT_PUBLIC_` 前缀。
 
 安全迁移和线上验证记录见 [数据库安全报告](docs/supabase-security.md)。
@@ -42,6 +44,7 @@ npm run test:db-security
 已有数据库没有 Prisma migration baseline；这份 SQL 是独立安全迁移。
 不要直接用 `migrate deploy` 或 `migrate reset` 代替上述命令。
 新增业务表必须开启 RLS，并重新执行安全检查；不要授予公开 Data API 权限。
+`KeepAlive` 是唯一预先写好的例外，重跑安全迁移会恢复它的单行授权，不要再扩大。
 
 ### 连接进销存直营汇总
 
