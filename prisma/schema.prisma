@@ -123,3 +123,11 @@ model CashFlow {
   sourceType String?
   sourceId   Int?
 }
+
+// 保活心跳，永远只有 id = 1 这一行。
+// GitHub Actions 每天经 Supabase Data API（PostgREST）更新 pingedAt。
+// anon 仅能读写这一行的时间戳；业务表不授予 Data API 权限。
+model KeepAlive {
+  id       Int      @id
+  pingedAt DateTime @default(now())
+}

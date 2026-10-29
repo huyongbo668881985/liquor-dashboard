@@ -30,8 +30,8 @@
 | DistributionGeneralExpense | **未开启** | SELECT / INSERT / DELETE |
 | CashFlow | 开启 | SELECT / INSERT / DELETE（含各模块自动同步） |
 
-所有表的 anon / authenticated SELECT、INSERT、UPDATE、DELETE 和额外权限均已撤销。
-无需新建允许策略：移除九条旧策略，采用 RLS 默认拒绝。保持已有服务端 postgres
+所有业务表的 anon / authenticated SELECT、INSERT、UPDATE、DELETE 和额外权限均已撤销。
+无需新建允许策略：移除九条旧策略，采用 RLS 默认拒绝。`KeepAlive` 是之后为免费版防暂停加的单行心跳，不在这十张业务表里：anon 只能 SELECT/UPDATE `id = 1`，不能插入、删除或改 id；authenticated 与 service_role 没有权限。保持已有服务端 postgres
 连接和业务事务，未新增 service_role key；高权限仍只存在于服务器数据库环境变量。
 服务端角色有全库权限，因此每个业务 Route Handler 必须独立验证签名会话。
 所有十一组数据 API 已补校验，首页查询前也校验，不再只依赖 middleware。
