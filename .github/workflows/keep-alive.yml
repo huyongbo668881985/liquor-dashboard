@@ -20,6 +20,8 @@ jobs:
           fi
 
           STAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          # PostgREST 把 timestamptz 序列化成 +00:00，而不是请求里的 Z。两种都是这次写入的 UTC 时刻。
+          STAMP_OFFSET="${STAMP%Z}+00:00"
           # PostgREST 在项目内部执行 UPDATE，不经过外部 Supavisor，也不经过网站的 Prisma 连接池。
           BODY=$(curl -sS -f -X PATCH \
             "${SUPABASE_URL}/rest/v1/KeepAlive?id=eq.1" \
@@ -31,7 +33,7 @@ jobs:
 
           printf '%s\n' "$BODY"
           case "$BODY" in
-            *"$STAMP"*) echo "Keep-alive heartbeat 已写入 ${STAMP}" ;;
+            *"$STAMP"*|*"$STAMP_OFFSET"*) echo "Keep-alive heartbeat 已写入 ${STAMP}" ;;
             *) echo "心跳响应里没有刚写入的时间戳，数据库写入未确认" >&2; exit 1 ;;
           esac
         env:
